@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'allergies.dart';
+import 'auth_callback.dart';
 import 'package:flutter/material.dart';
 import 'data.dart';
 import 'ui.dart';
@@ -8,7 +9,13 @@ import 'faithful_app.dart';
 class AccountFlow extends StatefulWidget {
   final KitchenStore s;
   final VoidCallback onReady;
-  const AccountFlow(this.s, {required this.onReady, super.key});
+  final int confirmationReturn;
+  const AccountFlow(
+    this.s, {
+    required this.onReady,
+    this.confirmationReturn = 0,
+    super.key,
+  });
   @override
   State<AccountFlow> createState() => _AccountFlowState();
 }
@@ -16,10 +23,29 @@ class AccountFlow extends StatefulWidget {
 class _AccountFlowState extends State<AccountFlow> {
   String page = 'welcome';
   bool visible = false, busy = false;
+  bool awaitingConfirmation = false;
   final form = GlobalKey<FormState>();
   final name = TextEditingController(),
       email = TextEditingController(),
       password = TextEditingController();
+  @override
+  void initState() {
+    super.initState();
+    if (widget.confirmationReturn > 0) {
+      page = 'login';
+      awaitingConfirmation = true;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AccountFlow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.confirmationReturn != oldWidget.confirmationReturn) {
+      page = 'login';
+      awaitingConfirmation = true;
+    }
+  }
+
   @override
   void dispose() {
     name.dispose();
@@ -50,6 +76,7 @@ class _AccountFlowState extends State<AccountFlow> {
         final result = await cloud!.client!.auth.signUp(
           email: email.text.trim(),
           password: password.text,
+          emailRedirectTo: confirmationRedirect,
           data: {'display_name': name.text.trim()},
         );
         if (result.session == null) {
@@ -58,7 +85,10 @@ class _AccountFlowState extends State<AccountFlow> {
               context,
               'Check your email to confirm your account, then log in.',
             );
-            setState(() => page = 'login');
+            setState(() {
+              page = 'login';
+              awaitingConfirmation = true;
+            });
           }
           return;
         }
@@ -81,12 +111,52 @@ class _AccountFlowState extends State<AccountFlow> {
         await enter();
       }
     } on AuthException catch (e) {
+      if (mounted && e.code == 'email_not_confirmed') {
+        setState(() => awaitingConfirmation = true);
+      }
       if (mounted) toast(context, e.message);
     } catch (_) {
       if (mounted) {
         toast(
           context,
           'Unable to sign in. Check your connection and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> resendConfirmation() async {
+    final address = email.text.trim();
+    if (!address.contains('@') || address.endsWith('@')) {
+      toast(context, 'Enter your email address first.');
+      return;
+    }
+    setState(() => busy = true);
+    try {
+      final client = widget.s.cloud?.client;
+      if (client == null) {
+        throw const AuthException('Account service unavailable.');
+      }
+      await client.auth.resend(
+        type: OtpType.signup,
+        email: address,
+        emailRedirectTo: confirmationRedirect,
+      );
+      if (mounted) {
+        toast(
+          context,
+          'Confirmation requested. Check your inbox and spam folder.',
+        );
+      }
+    } on AuthException catch (e) {
+      if (mounted) toast(context, e.message);
+    } catch (_) {
+      if (mounted) {
+        toast(
+          context,
+          'Unable to send email. Check your connection and try again.',
         );
       }
     } finally {
@@ -278,6 +348,11 @@ class _AccountFlowState extends State<AccountFlow> {
                       : 'Log in  →',
                   busy ? null : authenticate,
                 ),
+                if (!signup && awaitingConfirmation)
+                  TextButton(
+                    onPressed: busy ? null : resendConfirmation,
+                    child: const Text('Resend confirmation email'),
+                  ),
                 gap(20),
                 Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,

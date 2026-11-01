@@ -42,6 +42,20 @@ Future<void> imagesReady(WidgetTester t) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets('Email return opens existing login without authenticating', (t) async {
+    phone(t);
+    final s = await fresh(signed: false);
+    var signedIn = false;
+    await t.pumpWidget(MaterialApp(home: AccountFlow(s,
+      confirmationReturn: 1, onReady: () => signedIn = true)));
+    await t.pumpAndSettle();
+    expect(find.text('Welcome back.'), findsOneWidget);
+    expect(find.text('Resend confirmation email'), findsOneWidget);
+    expect(signedIn, isFalse);
+    await t.tap(find.text('Resend confirmation email'));
+    await t.pump();
+    expect(find.text('Enter your email address first.'), findsOneWidget);
+  });
   setUpAll(() async {
     for (final pair in {
       'DM Sans': 'assets/DMSans.ttf',

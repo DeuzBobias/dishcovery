@@ -20,6 +20,9 @@ Future<void> main() async {
       url: url,
       publishableKey: key,
       authOptions: FlutterAuthClientOptions(
+        // Email links return to password login, without replacing an existing
+        // account session or requiring a PKCE verifier on another phone.
+        detectSessionInUri: false,
         localStorage: SecureSessionStorage(
           'dishcovery.session.${Uri.parse(url).host}',
         ),

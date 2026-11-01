@@ -1,4 +1,7 @@
 import 'sync_screen.dart';
+import 'dart:async';
+import 'package:app_links/app_links.dart';
+import 'auth_callback.dart';
 import 'android_api.dart';
 import 'package:flutter/material.dart';
 import 'data.dart';
@@ -176,6 +179,31 @@ class FaithfulApp extends StatefulWidget {
 }
 
 class _FaithfulAppState extends State<FaithfulApp> with WidgetsBindingObserver {
+  StreamSubscription<Uri>? links;
+  int confirmationReturn = 0;
+  Uri? lastLink;
+
+  void receivedLink(Uri uri) {
+    if (!mounted || uri == lastLink) return;
+    final message = confirmationMessage(uri);
+    if (message == null) return;
+    lastLink = uri;
+    // Keep an already signed-in account intact; do not import URL sessions.
+    setState(() => confirmationReturn++);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) toast(context, message);
+    });
+  }
+
+  Future<void> initialLink() async {
+    try {
+      final uri = await AppLinks().getInitialLink();
+      if (uri != null) receivedLink(uri);
+    } catch (_) {
+      // Regular login remains available when no Android link is provided.
+    }
+  }
+
   void changed() {
     if (mounted) setState(() {});
   }
@@ -185,12 +213,17 @@ class _FaithfulAppState extends State<FaithfulApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.store.cloud?.addListener(changed);
+    if (widget.store.cloud?.configured ?? false) {
+      links = AppLinks().uriLinkStream.listen(receivedLink, onError: (_) {});
+      initialLink();
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.store.cloud?.removeListener(changed);
+    links?.cancel();
     super.dispose();
   }
 
@@ -215,6 +248,7 @@ class _FaithfulAppState extends State<FaithfulApp> with WidgetsBindingObserver {
         )
       : AccountFlow(
           widget.store,
+          confirmationReturn: confirmationReturn,
           onReady: () async {
             await widget.store.prefs.setBool('session_active', true);
             if (mounted) setState(() {});
