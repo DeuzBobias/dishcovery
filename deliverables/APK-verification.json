@@ -1,0 +1,10 @@
+{
+  "bytes": 20909026,
+  "sha256": "0fb5c7155f05cf2f6b16e7cf72f6437980a31fcc7f4c0c017a9b6dcbd1e2fee6",
+  "compiled_flutter": true,
+  "fonts": [
+    "assets/flutter_assets/assets/DMSans.ttf",
+    "assets/flutter_assets/assets/Lobster.ttf"
+  ],
+  "web_payloads": []
+}

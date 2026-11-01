@@ -1,0 +1,15 @@
+.tools/
+tmp/
+output/
+app/build/
+app/.dart_tool/
+app/.idea/
+app/*.iml
+**/.gradle/
+**/.kotlin/
+**/local.properties
+**/key.properties
+**/*.jks
+**/*.keystore
+**/.env
+**/.env.*
