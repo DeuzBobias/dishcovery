@@ -6,7 +6,7 @@ $env:PUB_CACHE=Join-Path $root '.tools/pub-cache'
 Set-Location (Join-Path $root 'app')
 & $flutter pub get
 if($LASTEXITCODE -ne 0){throw 'Dependency resolution failed.'}
-& $flutter build apk --release --target-platform android-arm64
+& $flutter build apk --release --target-platform android-arm64 --dart-define-from-file=config/supabase.json
 if($LASTEXITCODE -ne 0){throw 'Android build failed.'}
 $apk=Join-Path $root 'deliverables/Dishcovery-Android.apk'
 Copy-Item -LiteralPath 'build/app/outputs/flutter-apk/app-release.apk' -Destination $apk -Force

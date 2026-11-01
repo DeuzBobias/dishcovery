@@ -1,3 +1,5 @@
+import 'sync_screen.dart';
+import 'android_api.dart';
 import 'package:flutter/material.dart';
 import 'data.dart';
 import 'ui.dart';
@@ -173,14 +175,41 @@ class FaithfulApp extends StatefulWidget {
   State<FaithfulApp> createState() => _FaithfulAppState();
 }
 
-class _FaithfulAppState extends State<FaithfulApp> {
-  bool get signed => widget.store.prefs.getBool('session_active') ?? false;
+class _FaithfulAppState extends State<FaithfulApp> with WidgetsBindingObserver {
+  void changed() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.store.cloud?.addListener(changed);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.store.cloud?.removeListener(changed);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) widget.store.cloud?.sync();
+  }
+
+  bool get signed =>
+      (widget.store.cloud == null || widget.store.cloud!.signedIn) &&
+      (widget.store.prefs.getBool('session_active') ?? false);
   @override
   Widget build(BuildContext c) => signed
       ? OriginalShell(
           widget.store,
           onLogout: () async {
             await widget.store.prefs.setBool('session_active', false);
+            await AndroidApi.cancelTimer();
+            await widget.store.cloud?.signOut();
             if (mounted) setState(() {});
           },
         )
@@ -832,6 +861,12 @@ class _OriginalShellState extends State<OriginalShell> {
           () => present(context, TrackerScreen(s)),
         ),
       setting('Personal Data', Icons.person_outline, personalData),
+      if (s.cloud != null)
+        setting(
+          'Account & cloud sync',
+          Icons.cloud_outlined,
+          () => present(context, SyncScreen(s)),
+        ),
       setting(
         'Goals & cooking preferences',
         Icons.tune,
@@ -865,7 +900,7 @@ class _OriginalShellState extends State<OriginalShell> {
           builder: (c) => AlertDialog(
             title: const Text('A little help in your kitchen'),
             content: const Text(
-              'Create and save recipes, match your pantry, compare ingredient costs in pesos, and track meals from your fitness profile. Your kitchen is stored on this device. Community content and accounts are local presentation features.',
+              'Create and save recipes, match your pantry, compare ingredient costs in pesos, and track meals from your fitness profile. Your kitchen is saved locally and can sync with your account. The community feed currently contains sample content.',
             ),
             actions: [
               TextButton(
@@ -882,14 +917,14 @@ class _OriginalShellState extends State<OriginalShell> {
         () => present(context, BackupScreen(s)),
       ),
       setting(
-        'Delete local data',
+        'Reset my kitchen',
         Icons.delete_outline,
         () => showDialog(
           context: context,
           builder: (c) => AlertDialog(
-            title: const Text('Delete local data?'),
+            title: const Text('Reset my kitchen?'),
             content: const Text(
-              'Export a backup first if you want to keep your kitchen.',
+              'This clears your kitchen and syncs the reset to your account. Export a backup first to keep a copy.',
             ),
             actions: [
               TextButton(
@@ -919,7 +954,7 @@ class _OriginalShellState extends State<OriginalShell> {
       gap(18),
       Center(
         child: Text(
-          'Dishcovery 1.0 · Presentation edition\nYour data stays on this device.',
+          'Dishcovery\nYour everyday kitchen companion.',
           textAlign: TextAlign.center,
           style: type(11, color: muted),
         ),
@@ -1038,10 +1073,41 @@ class _OriginalShellState extends State<OriginalShell> {
             SwitchListTile(
               title: const Text('Kitchen activity notifications'),
               value: s.notifications,
-              onChanged: (v) {
+              onChanged: (v) async {
+                if (v) {
+                  try {
+                    await AndroidApi.requestNotifications();
+                  } catch (_) {
+                    if (c.mounted) {
+                      toast(c, 'Enable notifications in Android settings.');
+                    }
+                  }
+                }
                 s.notifications = v;
                 s.save();
                 update(() {});
+              },
+            ),
+            ListTile(
+              title: const Text('Send test notification'),
+              onTap: () async {
+                if (!s.notifications) {
+                  toast(c, 'Turn on kitchen notifications first.');
+                  return;
+                }
+                try {
+                  await AndroidApi.notification(
+                    'Notifications are ready for your kitchen.',
+                  );
+                  if (c.mounted) toast(c, 'Test notification sent');
+                } catch (_) {
+                  if (c.mounted) {
+                    toast(
+                      c,
+                      'Allow Dishcovery notifications in Android settings, then try again.',
+                    );
+                  }
+                }
               },
             ),
             ListTile(

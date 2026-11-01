@@ -18,6 +18,20 @@ class MainActivity : FlutterActivity() {
    try { when(call.method) {
     "share" -> {startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {type="text/plain";putExtra(Intent.EXTRA_TEXT,call.argument<String>("text"))},"Share recipe")); result.success(null)}
     "openUrl" -> {val uri=Uri.parse(call.argument<String>("url"));if(uri.scheme!="https")throw IllegalArgumentException("Only HTTPS links are supported");startActivity(Intent(Intent.ACTION_VIEW,uri));result.success(null)}
+    "requestNotifications" -> {
+     if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),43)
+     result.success(null)
+    }
+    "notification" -> {
+     val manager=getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+     if(Build.VERSION.SDK_INT<33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED){
+      if(Build.VERSION.SDK_INT>=26)manager.createNotificationChannel(NotificationChannel("activity","Kitchen activity",NotificationManager.IMPORTANCE_DEFAULT))
+      val open=PendingIntent.getActivity(this,19,Intent(this,MainActivity::class.java),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+      val builder=if(Build.VERSION.SDK_INT>=26)Notification.Builder(this,"activity")else Notification.Builder(this)
+      manager.notify(19,builder.setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("Dishcovery").setContentText(call.argument<String>("message")?:"Your kitchen has an update").setContentIntent(open).setAutoCancel(true).build())
+     }else{result.error("permission","Allow notifications in Android settings",null);return@setMethodCallHandler}
+     result.success(null)
+    }
     "timer" -> {
      if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),43);result.error("permission","Allow notifications, then start the timer again",null)} else {
       val seconds=call.argument<Int>("seconds")?:0

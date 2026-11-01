@@ -1,3 +1,6 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'local_store.dart';
+import 'cloud_account.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'data.dart';
@@ -7,7 +10,27 @@ import 'faithful_app.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
-  runApp(DishcoveryApp(store: KitchenStore(prefs)));
+  final local = await SqliteStore.open();
+  await local.preserveLegacy(prefs);
+  const url = String.fromEnvironment('SUPABASE_URL');
+  const key = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
+  SupabaseClient? client;
+  if (url.isNotEmpty && key.isNotEmpty) {
+    await Supabase.initialize(
+      url: url,
+      publishableKey: key,
+      authOptions: FlutterAuthClientOptions(
+        localStorage: SecureSessionStorage(
+          'dishcovery.session.${Uri.parse(url).host}',
+        ),
+      ),
+    );
+    client = Supabase.instance.client;
+  }
+  final cloud = CloudAccount(local, client);
+  final store = KitchenStore(local, cloud: cloud);
+  await cloud.bind();
+  runApp(DishcoveryApp(store: store));
 }
 
 class DishcoveryApp extends StatelessWidget {

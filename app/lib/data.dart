@@ -1,10 +1,12 @@
+import 'android_api.dart';
 import 'dart:convert';
 import 'catalog.dart';
 import 'nutrition.dart';
 import 'deficit.dart';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'cloud_account.dart';
+import 'allergies.dart';
 
 class Recipe {
   final String id,
@@ -100,14 +102,16 @@ final seedRecipes = (jsonDecode(recipeCatalog) as List)
     .toList();
 
 class KitchenStore extends ChangeNotifier {
-  final SharedPreferences prefs;
+  final dynamic prefs;
+  final CloudAccount? cloud;
   Map<String, dynamic> wellness = {'purpose': 'Recipes'};
   List<Map<String, dynamic>> foodLog = [];
   Map<String, dynamic> targets = {};
   List<Map<String, dynamic>> deficitPlans = [];
   Map<String, dynamic> completedFoodDays = {};
   Map<String, dynamic> prices = {};
-  KitchenStore(this.prefs) {
+  KitchenStore(this.prefs, {this.cloud}) {
+    if (cloud != null) cloud!.onReload = reload;
     _load();
   }
   String avatar = '';
@@ -138,9 +142,9 @@ class KitchenStore extends ChangeNotifier {
 
   void _load() {
     final raw = prefs.getString('kitchen_v1');
-    if (raw == null) return;
+    // Empty account scope must never inherit a previous user’s values.
     try {
-      final j = jsonDecode(raw) as Map<String, dynamic>;
+      final j = jsonDecode(raw ?? '{}') as Map<String, dynamic>;
       wellness = Map<String, dynamic>.from(
         j['wellness'] ?? {'purpose': 'Recipes'},
       );
@@ -157,9 +161,9 @@ class KitchenStore extends ChangeNotifier {
       );
       prices = Map<String, dynamic>.from(j['prices'] ?? {});
       avatar = j['avatar'] ?? '';
-      name = j['name'] ?? name;
-      bio = j['bio'] ?? bio;
-      skill = j['skill'] ?? skill;
+      name = j['name'] ?? 'Home cook';
+      bio = j['bio'] ?? 'A little curiosity. A lot of good food.';
+      skill = j['skill'] ?? 'Beginner';
       cuisines = List<String>.from(j['cuisines'] ?? []);
       allergies = List<String>.from(j['allergies'] ?? []);
       pantry = List<String>.from(j['pantry'] ?? []);
@@ -220,7 +224,10 @@ class KitchenStore extends ChangeNotifier {
   }
 
   void log(String message) {
-    if (notifications) activity.insert(0, message);
+    if (notifications) {
+      activity.insert(0, message);
+      AndroidApi.notification(message).catchError((_) {});
+    }
     if (activity.length > 100) activity.removeLast();
   }
 
@@ -250,7 +257,7 @@ class KitchenStore extends ChangeNotifier {
   }
 
   List<String> warnings(Recipe r) =>
-      r.allergens.where(allergies.contains).toList();
+      allergyWarnings(allergies, r.allergens, r.ingredients);
   bool hasIngredient(String ingredient) =>
       ingredientMatches(ingredient, pantry);
   double match(Recipe r) =>

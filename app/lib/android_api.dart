@@ -15,5 +15,8 @@ class AndroidApi {
   static Future<void> openUrl(String url) => invoke('openUrl', {'url': url});
   static Future<void> timer(int seconds, String title) =>
       invoke('timer', {'seconds': seconds, 'title': title});
+  static Future<void> notification(String message) =>
+      invoke('notification', {'message': message});
+  static Future<void> requestNotifications() => invoke('requestNotifications');
   static Future<void> cancelTimer() => invoke('cancelTimer');
 }

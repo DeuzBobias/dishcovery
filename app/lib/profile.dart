@@ -1,3 +1,4 @@
+import 'allergies.dart';
 import 'package:flutter/material.dart';
 
 import 'data.dart';
@@ -180,6 +181,10 @@ class _ProfileSetupState extends State<ProfileSetup> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Anything to look out for?', style: serif(24)),
+                      CustomAllergies(
+                        values: allergies,
+                        onChanged: () => setState(() {}),
+                      ),
                       gap(8),
                       const Text(
                         'Flag recipes with these declared allergens. Always check labels and preparation conditions.',

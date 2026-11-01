@@ -1,3 +1,5 @@
+import 'allergies.dart';
+
 const macroKeys = ['calories', 'protein', 'carbs', 'fat'];
 String peso(num n) => '₱${n.toStringAsFixed(2)}';
 String dayKey(DateTime d) =>
@@ -72,7 +74,13 @@ List<Map<String, dynamic>> budgetResults(
 }) {
   final results = <Map<String, dynamic>>[];
   for (final r in recipes) {
-    if ((r['allergens'] as List).any(allergies.contains)) continue;
+    if (allergyWarnings(
+      allergies,
+      List<String>.from(r['allergens'] ?? []),
+      List<String>.from(r['ingredients'] ?? []),
+    ).isNotEmpty) {
+      continue;
+    }
     final factor = servings / (r['servings'] as num);
     final facts = r['ingredientFacts'] as Map;
     final overrides = prices[r['id']] as Map? ?? {};

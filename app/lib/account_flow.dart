@@ -1,24 +1,9 @@
-import 'dart:convert';
-import 'dart:math';
-import 'package:crypto/crypto.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'allergies.dart';
 import 'package:flutter/material.dart';
 import 'data.dart';
 import 'ui.dart';
 import 'faithful_app.dart';
-
-// Local presentation accounts, deliberately independent of exported kitchen data.
-String localPasswordHash(String password, String salt) {
-  final hmac = Hmac(sha256, utf8.encode(password));
-  var u = hmac.convert([...base64Decode(salt), 0, 0, 0, 1]).bytes;
-  final result = List<int>.from(u);
-  for (var i = 1; i < 100000; i++) {
-    u = hmac.convert(u).bytes;
-    for (var j = 0; j < result.length; j++) {
-      result[j] ^= u[j];
-    }
-  }
-  return base64Encode(result);
-}
 
 class AccountFlow extends StatefulWidget {
   final KitchenStore s;
@@ -54,57 +39,58 @@ class _AccountFlowState extends State<AccountFlow> {
   Future<void> authenticate() async {
     if (!form.currentState!.validate()) return;
     setState(() => busy = true);
-    final address = email.text.trim().toLowerCase();
-    final accounts = Map<String, dynamic>.from(
-      jsonDecode(widget.s.prefs.getString('local_accounts') ?? '{}'),
-    );
-    if (page == 'signup') {
-      if (accounts.containsKey(address)) {
-        toast(context, 'This local account already exists. Log in instead.');
-        setState(() => busy = false);
-        return;
+    final cloud = widget.s.cloud;
+    try {
+      if (cloud?.client == null) {
+        throw const AuthException(
+          'Account service is not configured. Please contact the app administrator.',
+        );
       }
-      final salt = base64Encode(
-        List.generate(16, (_) => Random.secure().nextInt(256)),
-      );
-      accounts[address] = {
-        'salt': salt,
-        'hash': localPasswordHash(password.text, salt),
-        'name': name.text.trim(),
-      };
-      if (!await widget.s.prefs.setString(
-        'local_accounts',
-        jsonEncode(accounts),
-      )) {
-        if (mounted) {
-          toast(context, 'Could not save your local account.');
-          setState(() => busy = false);
+      if (page == 'signup') {
+        final result = await cloud!.client!.auth.signUp(
+          email: email.text.trim(),
+          password: password.text,
+          data: {'display_name': name.text.trim()},
+        );
+        if (result.session == null) {
+          if (mounted) {
+            toast(
+              context,
+              'Check your email to confirm your account, then log in.',
+            );
+            setState(() => page = 'login');
+          }
+          return;
         }
-        return;
+      } else {
+        await cloud!.client!.auth.signInWithPassword(
+          email: email.text.trim(),
+          password: password.text,
+        );
       }
-      widget.s.name = name.text.trim();
-      await widget.s.save();
-    } else {
-      final account = accounts[address];
-      if (account == null ||
-          account['hash'] !=
-              localPasswordHash(password.text, account['salt'])) {
-        if (mounted) {
-          toast(
-            context,
-            'Email or password does not match a local account on this device.',
-          );
-          setState(() => busy = false);
-        }
-        return;
+      await cloud.bind();
+      if (!widget.s.onboarded) {
+        widget.s.name =
+            cloud.client!.auth.currentUser?.userMetadata?['display_name'] ??
+            name.text.trim();
+        await widget.s.save();
       }
-      widget.s.name = account['name'];
-      await widget.s.save();
-    }
-    password.clear();
-    if (mounted) {
-      setState(() => busy = false);
-      await enter();
+      password.clear();
+      if (mounted) {
+        toast(context, 'Signed in successfully');
+        await enter();
+      }
+    } on AuthException catch (e) {
+      if (mounted) toast(context, e.message);
+    } catch (_) {
+      if (mounted) {
+        toast(
+          context,
+          'Unable to sign in. Check your connection and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
@@ -189,7 +175,7 @@ class _AccountFlowState extends State<AccountFlow> {
                     TextButton(
                       onPressed: () => setState(() => page = 'login'),
                       child: Text(
-                        'Already have a local account? Log in',
+                        'Already have an account? Log in',
                         style: type(12, color: Colors.white),
                       ),
                     ),
@@ -288,7 +274,7 @@ class _AccountFlowState extends State<AccountFlow> {
                   busy
                       ? 'Please wait…'
                       : signup
-                      ? 'Create local account  →'
+                      ? 'Create an Account  →'
                       : 'Log in  →',
                   busy ? null : authenticate,
                 ),
@@ -314,7 +300,7 @@ class _AccountFlowState extends State<AccountFlow> {
                 ),
                 gap(20),
                 Text(
-                  'Presentation mode · accounts stay on this device.\nNo email is sent and no cloud service is connected.',
+                  'Sign in to sync your kitchen across your devices.',
                   textAlign: TextAlign.center,
                   style: type(11, color: muted),
                 ),
@@ -575,7 +561,9 @@ class _OriginalOnboardingState extends State<OriginalOnboarding> {
                     runSpacing: 8,
                     children: [
                       for (final value
-                          in step == 4 ? categories : allergensList)
+                          in step == 4
+                              ? categories
+                              : {...allergensList, ...allergies}.toList())
                         FilterChip(
                           label: Text(value),
                           selected: (step == 4 ? cuisines : allergies).contains(
@@ -589,6 +577,10 @@ class _OriginalOnboardingState extends State<OriginalOnboarding> {
                     ],
                   ),
                 if (step == 5) ...[
+                  CustomAllergies(
+                    values: allergies,
+                    onChanged: () => setState(() {}),
+                  ),
                   gap(20),
                   Text(
                     'Always check ingredient labels and preparation conditions.',

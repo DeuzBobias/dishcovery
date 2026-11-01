@@ -21,7 +21,7 @@ From `app/`, run `../.tools/flutter/bin/flutter.bat analyze` and `../.tools/flut
 - Optional age, height and weight plus Fitness, Recipes or Community preferences.
 - Daily food log with manual or recipe entries, fractional portions, editable entries, removal/restoration, date selection and user-set calorie/macro targets.
 - Optional personalized calorie plans for Fitness users, with estimated maintenance, daily food targets, dated plan history and completed-day estimated balances. See `deliverables/Flutter-Verification.md` for the calculation and limitations.
-- Native Documents file export/import for backups. User records stay in Android application storage using the shared_preferences plugin.
+- Native Documents file export/import for backups. User records are stored in account-scoped SQLite storage and sync through Supabase.
 
 ## Android integration
 
@@ -31,20 +31,20 @@ One cooking reminder is active at a time. The deadline is saved and recovered wh
 
 ## Scope and verification
 
-The APK build and Flutter automated tests are checked locally. Physical-device installation and native share, file-picker and notification behavior still require phone testing. There is no connected account backend, real multiuser community, cloud synchronization or remote AI service. Sample community activity remains local. SQLite and Firebase described in the architecture guide are future architecture choices, not dependencies in this build.
+The APK build and Flutter automated tests are checked locally. Physical-device installation and native share, file-picker and notification behavior still require phone testing. Supabase provides email/password authentication and private account synchronization. SQLite provides local persistence. The community feed and assistant remain local features; no public multiuser community or remote AI service is implemented. Older architecture and video documents describe earlier builds; see supabase/README.md for the current setup.
 
 Nutrition is illustrative or creator-entered. Ingredient edits require reviewing nutrition; swaps do not recalculate automatically. Built-in source references are dated 15 October 2026 and remaining costs are explicitly planning allowances.
 
 Source design materials remain in `Temporary UI`, `Dishcovery.docx` and `Dishcovery-UserManual.pdf`. Asset attribution is in `app/assets/ATTRIBUTION.md`.
 
-Verification: flutter analyze reports no issues and all 24 Flutter tests pass. The release APK is built for arm64-v8a.
+Verification: flutter analyze reports no issues and all 29 Flutter tests pass. The release APK is built for arm64-v8a.
 
 
 ## Interface restoration
 
 The Android interface uses the recovered original DM Sans and Lobster fonts, original photography, logo and welcome artwork. It restores the local signup/login screens, six-step preferences wizard, Home / Recipes / Create / Activity / Profile navigation, food and people search, local follows, personal-data/photo editing, two-stage recipe editor, draft persistence, ordered instructions and per-step timers. Page transitions use the original 220 ms duration and primary button presses use a 150 ms scale animation.
 
-Local account credentials use salted PBKDF2-HMAC-SHA256 hashes (100,000 iterations). These are presentation accounts on this device, not a cloud authentication service. Kitchen data remains a local presentation workspace.
+Accounts now use Supabase authentication with email confirmation. Sessions are stored through Android secure storage. Earlier local credentials are not cloud accounts. Create a cloud account, then use Account & cloud sync to import earlier device data if needed.
 
 Reference screenshots for the restored phone interface are in `app/test/goldens/restored-*.png`. Android system dialogs, sharing and notification permission prompts use the platform UI. The browser prototype remains a comparison reference, not part of the APK.
 
@@ -57,7 +57,14 @@ flutter doctor
 flutter pub get
 flutter analyze
 flutter test
-flutter run
+flutter run --dart-define-from-file=config/supabase.json
 ```
 
-Connect an Android phone with USB debugging or start an Android emulator before `flutter run`. To create an installer, run `flutter build apk --release --target-platform android-arm64`. Flutter generates machine-specific Android SDK paths locally. The `.tools` SDK and package caches used by the original Windows build scripts are not required when Flutter is installed on PATH. Release signing currently uses the development signing configuration for presentation builds; no private signing keys are included.
+Connect an Android phone with USB debugging or start an Android emulator before `flutter run`. To create an installer, run `flutter build apk --release --target-platform android-arm64 --dart-define-from-file=config/supabase.json`. Flutter generates machine-specific Android SDK paths locally. The `.tools` SDK and package caches used by the original Windows build scripts are not required when Flutter is installed on PATH. Release signing currently uses the development signing configuration for presentation builds; no private signing keys are included.
+
+
+## Cloud setup and current release
+
+Version 1.1.0 (build 3) adds Supabase account sync, SQLite persistence, custom allergies, and local Android notification controls. The original fonts, imagery and navigation remain. See [Supabase setup](supabase/README.md) and the SQL migration in `supabase/migrations`. The checked-in configuration contains the public publishable key only, not an administrator credential.
+
+The project connection and denial of anonymous kitchen reads have been verified. Cross-device authenticated sync and Android permissions still require signed-in physical-device testing. All 29 Flutter tests and static analysis pass.

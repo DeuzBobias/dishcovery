@@ -463,7 +463,9 @@ class _CookingScreenState extends State<CookingScreen> {
     }
     if (seconds == 0) return;
     try {
-      await AndroidApi.timer(seconds, widget.recipe.title);
+      if (widget.store.notifications) {
+        await AndroidApi.timer(seconds, widget.recipe.title);
+      }
     } catch (_) {
       if (mounted) {
         toast(

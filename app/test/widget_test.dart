@@ -95,31 +95,32 @@ void main() {
       expect(t.takeException(), isNull);
     },
   );
-  testWidgets('Welcome and signup preserve fields, fonts and local mode', (
-    t,
-  ) async {
-    phone(t);
-    final s = await fresh(signed: false);
-    await t.pumpWidget(DishcoveryApp(store: s));
-    await t.pumpAndSettle();
-    expect(find.text('Get started'), findsOneWidget);
-    await imagesReady(t);
-    await expectLater(
-      find.byType(MaterialApp),
-      matchesGoldenFile('goldens/restored-welcome.png'),
-    );
-    await click(t, 'Get started');
-    expect(find.text('Your kitchen awaits.'), findsOneWidget);
-    expect(find.byType(TextFormField), findsNWidgets(3));
-    await imagesReady(t);
-    await expectLater(
-      find.byType(MaterialApp),
-      matchesGoldenFile('goldens/restored-signup.png'),
-    );
-    await click(t, 'Create local account  →');
-    expect(find.text('Enter your name'), findsOneWidget);
-    expect(t.takeException(), isNull);
-  });
+  testWidgets(
+    'Welcome and signup preserve fields, fonts and account validation',
+    (t) async {
+      phone(t);
+      final s = await fresh(signed: false);
+      await t.pumpWidget(DishcoveryApp(store: s));
+      await t.pumpAndSettle();
+      expect(find.text('Get started'), findsOneWidget);
+      await imagesReady(t);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/restored-welcome.png'),
+      );
+      await click(t, 'Get started');
+      expect(find.text('Your kitchen awaits.'), findsOneWidget);
+      expect(find.byType(TextFormField), findsNWidgets(3));
+      await imagesReady(t);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/restored-signup.png'),
+      );
+      await click(t, 'Create an Account  →');
+      expect(find.text('Enter your name'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    },
+  );
   testWidgets(
     'Six step onboarding saves purpose, optional measurements and preferences',
     (t) async {
@@ -138,9 +139,17 @@ void main() {
       await click(t, 'Filipino');
       await click(t, 'Continue');
       await click(t, 'Eggs');
+      await t.ensureVisible(
+        find.widgetWithText(TextField, 'Add another allergy'),
+      );
+      await t.enterText(
+        find.widgetWithText(TextField, 'Add another allergy'),
+        'Celery',
+      );
+      await click(t, 'Add allergy');
       await click(t, 'Let’s get cooking');
       expect(s.skill, 'Intermediate');
-      expect(s.allergies, contains('Eggs'));
+      expect(s.allergies, containsAll(['Eggs', 'Celery']));
       expect(s.wellness['purpose'], 'Fitness');
       expect(s.wellness['height'], isNull);
       expect(t.takeException(), isNull);
@@ -228,12 +237,4 @@ void main() {
       expect(reloaded.saved, contains('own-test'));
     },
   );
-  test('Local password verification uses salted PBKDF2 hashes', () {
-    final a = localPasswordHash('test-password', 'AAECAwQFBgcICQoLDA0ODw==');
-    expect(a, localPasswordHash('test-password', 'AAECAwQFBgcICQoLDA0ODw=='));
-    expect(
-      a,
-      isNot(localPasswordHash('wrong-password', 'AAECAwQFBgcICQoLDA0ODw==')),
-    );
-  });
 }
