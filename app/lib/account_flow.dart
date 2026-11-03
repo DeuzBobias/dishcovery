@@ -62,6 +62,22 @@ class _AccountFlowState extends State<AccountFlow> {
     widget.onReady();
   }
 
+  Future<void> explore() async {
+    if (busy) return;
+    setState(() => busy = true);
+    try {
+      final cloud = widget.s.cloud;
+      if (cloud != null && !cloud.usingGuestKitchen) await cloud.signOut();
+      if (mounted) await enter();
+    } catch (_) {
+      if (mounted) {
+        toast(context, 'Unable to open the guest kitchen. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> authenticate() async {
     if (!form.currentState!.validate()) return;
     setState(() => busy = true);
@@ -86,7 +102,7 @@ class _AccountFlowState extends State<AccountFlow> {
               'Check your email to confirm your account, then log in.',
             );
             setState(() {
-              page = 'login';
+              page = 'confirm';
               awaitingConfirmation = true;
             });
           }
@@ -236,7 +252,7 @@ class _AccountFlowState extends State<AccountFlow> {
                       ),
                     ),
                     TextButton(
-                      onPressed: enter,
+                      onPressed: busy ? null : explore,
                       child: Text(
                         'Take a look around · Explore demo',
                         style: type(12, color: Colors.white),
@@ -282,107 +298,132 @@ class _AccountFlowState extends State<AccountFlow> {
                 gap(8),
                 brand(),
                 gap(10),
-                Text(
-                  signup ? 'Your kitchen awaits.' : 'Welcome back.',
-                  style: type(27, weight: FontWeight.w700),
-                ),
-                gap(10),
-                Text(
-                  signup
-                      ? 'Discover something delicious every day.'
-                      : 'A little inspiration is waiting for you.',
-                  style: type(12, color: muted),
-                ),
-                gap(30),
-                if (signup)
-                  fieldLabel(
-                    'Your name',
-                    TextFormField(
-                      controller: name,
-                      decoration: inputBox(hint: 'What should we call you?'),
-                      validator: (v) => v == null || v.trim().isEmpty
-                          ? 'Enter your name'
-                          : null,
-                    ),
+                if (page == 'confirm') ...[
+                  Text(
+                    'Check your email',
+                    style: type(27, weight: FontWeight.w700),
                   ),
-                fieldLabel(
-                  'Email',
-                  TextFormField(
-                    controller: email,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: inputBox(hint: 'you@example.com'),
-                    validator: (v) =>
-                        RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v ?? '')
-                        ? null
-                        : 'Enter a valid email',
+                  gap(10),
+                  Text(
+                    'Open the confirmation link sent to ${email.text.trim()} on this phone, then sign in to your kitchen.',
+                    textAlign: TextAlign.center,
                   ),
-                ),
-                fieldLabel(
-                  'Password',
-                  TextFormField(
-                    controller: password,
-                    obscureText: !visible,
-                    decoration: inputBox(
-                      hint: signup ? 'At least 8 characters' : 'Your password',
-                      suffix: IconButton(
-                        tooltip: visible ? 'Hide password' : 'Show password',
-                        onPressed: () => setState(() => visible = !visible),
-                        icon: Icon(
-                          visible
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                        ),
-                      ),
-                    ),
-                    validator: (v) => (v?.length ?? 0) < 8
-                        ? 'Use at least 8 characters'
-                        : null,
+                  gap(20),
+                  primary(
+                    'Continue to login',
+                    () => setState(() => page = 'login'),
                   ),
-                ),
-                gap(10),
-                primary(
-                  busy
-                      ? 'Please wait…'
-                      : signup
-                      ? 'Create an Account  →'
-                      : 'Log in  →',
-                  busy ? null : authenticate,
-                ),
-                if (!signup && awaitingConfirmation)
                   TextButton(
                     onPressed: busy ? null : resendConfirmation,
                     child: const Text('Resend confirmation email'),
                   ),
-                gap(20),
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      signup
-                          ? 'Already have an account?'
-                          : 'New to Dishcovery?',
-                      style: type(12),
+                ] else ...[
+                  Text(
+                    signup ? 'Your kitchen awaits.' : 'Welcome back.',
+                    style: type(27, weight: FontWeight.w700),
+                  ),
+                  gap(10),
+                  Text(
+                    signup
+                        ? 'Discover something delicious every day.'
+                        : 'A little inspiration is waiting for you.',
+                    style: type(12, color: muted),
+                  ),
+                  gap(30),
+                  if (signup)
+                    fieldLabel(
+                      'Your name',
+                      TextFormField(
+                        controller: name,
+                        decoration: inputBox(hint: 'What should we call you?'),
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Enter your name'
+                            : null,
+                      ),
                     ),
+                  fieldLabel(
+                    'Email',
+                    TextFormField(
+                      controller: email,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: inputBox(hint: 'you@example.com'),
+                      validator: (v) =>
+                          RegExp(
+                            r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                          ).hasMatch(v ?? '')
+                          ? null
+                          : 'Enter a valid email',
+                    ),
+                  ),
+                  fieldLabel(
+                    'Password',
+                    TextFormField(
+                      controller: password,
+                      obscureText: !visible,
+                      decoration: inputBox(
+                        hint: signup
+                            ? 'At least 8 characters'
+                            : 'Your password',
+                        suffix: IconButton(
+                          tooltip: visible ? 'Hide password' : 'Show password',
+                          onPressed: () => setState(() => visible = !visible),
+                          icon: Icon(
+                            visible
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                          ),
+                        ),
+                      ),
+                      validator: (v) => (v?.length ?? 0) < 8
+                          ? 'Use at least 8 characters'
+                          : null,
+                    ),
+                  ),
+                  gap(10),
+                  primary(
+                    busy
+                        ? 'Please wait…'
+                        : signup
+                        ? 'Create an Account  →'
+                        : 'Log in  →',
+                    busy ? null : authenticate,
+                  ),
+                  if (!signup && awaitingConfirmation)
                     TextButton(
-                      onPressed: () {
-                        form.currentState?.reset();
-                        password.clear();
-                        setState(() => page = signup ? 'login' : 'signup');
-                      },
-                      child: Text(signup ? 'Log in' : 'Get started'),
+                      onPressed: busy ? null : resendConfirmation,
+                      child: const Text('Resend confirmation email'),
                     ),
-                  ],
-                ),
-                gap(20),
-                Text(
-                  'Sign in to sync your kitchen across your devices.',
-                  textAlign: TextAlign.center,
-                  style: type(11, color: muted),
-                ),
-                TextButton(
-                  onPressed: enter,
-                  child: const Text('Explore without an account'),
-                ),
+                  gap(20),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        signup
+                            ? 'Already have an account?'
+                            : 'New to Dishcovery?',
+                        style: type(12),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          form.currentState?.reset();
+                          password.clear();
+                          setState(() => page = signup ? 'login' : 'signup');
+                        },
+                        child: Text(signup ? 'Log in' : 'Get started'),
+                      ),
+                    ],
+                  ),
+                  gap(20),
+                  Text(
+                    'Sign in to sync your kitchen across your devices.',
+                    textAlign: TextAlign.center,
+                    style: type(11, color: muted),
+                  ),
+                  TextButton(
+                    onPressed: busy ? null : explore,
+                    child: const Text('Explore without an account'),
+                  ),
+                ],
               ],
             ),
           ),

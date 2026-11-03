@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart' as sb;
+import 'package:dishcovery/cloud_account.dart';
+import 'package:dishcovery/local_store.dart';
 import 'package:dishcovery/main.dart';
 import 'package:dishcovery/data.dart';
 import 'package:dishcovery/faithful_app.dart';
@@ -9,9 +12,37 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Future<KitchenStore> fresh({bool signed = true}) async {
+class PendingSignupAuth extends Fake implements sb.GoTrueClient {
+  @override
+  Future<sb.AuthResponse> signUp({
+    String? email,
+    String? phone,
+    required String password,
+    String? emailRedirectTo,
+    Map<String, dynamic>? data,
+    String? captchaToken,
+    sb.OtpChannel channel = sb.OtpChannel.sms,
+  }) async {
+    expect(emailRedirectTo, 'com.dishcovery.dishcovery://login-callback/');
+    return sb.AuthResponse();
+  }
+}
+
+class PendingSignupClient extends Fake implements sb.SupabaseClient {
+  @override
+  final auth = PendingSignupAuth();
+}
+
+class GuestLocalStore extends Fake implements SqliteStore {
+  @override
+  String scope = 'signed-out';
+  @override
+  void Function()? onChange;
+}
+
+Future<KitchenStore> fresh({bool signed = true, CloudAccount? cloud}) async {
   SharedPreferences.setMockInitialValues({'session_active': signed});
-  final s = KitchenStore(await SharedPreferences.getInstance());
+  final s = KitchenStore(await SharedPreferences.getInstance(), cloud: cloud);
   s.name = 'Alex';
   s.onboarded = true;
   s.wellness = {'purpose': 'Fitness', 'complete': true};
@@ -42,12 +73,69 @@ Future<void> imagesReady(WidgetTester t) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets('Email return opens existing login without authenticating', (t) async {
+  testWidgets(
+    'Signup waits for confirmation and a warm email callback opens login',
+    (t) async {
+      phone(t);
+      final s = await fresh(
+        signed: false,
+        cloud: CloudAccount(GuestLocalStore(), PendingSignupClient()),
+      );
+      Widget app(int returns) => MaterialApp(
+        home: AccountFlow(
+          s,
+          confirmationReturn: returns,
+          onReady: () => fail('Signup must wait for login'),
+        ),
+      );
+      await t.pumpWidget(app(0));
+      await click(t, 'Get started');
+      final fields = find.byType(TextFormField);
+      await t.enterText(fields.at(0), 'Cook');
+      await t.enterText(fields.at(1), 'cook@example.com');
+      await t.enterText(fields.at(2), 'test-password');
+      await click(t, 'Create an Account  →');
+      expect(find.text('Check your email'), findsOneWidget);
+      await t.pumpWidget(app(1));
+      await t.pumpAndSettle();
+      expect(find.text('Welcome back.'), findsOneWidget);
+      expect(find.text('cook@example.com'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'Explore without an account opens the local kitchen with a cloud account manager present',
+    (t) async {
+      phone(t);
+      final local = GuestLocalStore();
+      final cloud = CloudAccount(local, null)..ready = true;
+      final s = await fresh(signed: false, cloud: cloud);
+      await t.pumpWidget(DishcoveryApp(store: s));
+      await click(t, 'Already have an account? Log in');
+      await click(t, 'Explore without an account');
+      expect(find.byType(OriginalShell), findsOneWidget);
+      expect(cloud.signedIn, isFalse);
+      local.scope = 'another-account';
+      s.cloud!.ready = false;
+      await t.pumpWidget(const SizedBox());
+      await t.pumpWidget(DishcoveryApp(store: s));
+      expect(find.byType(OriginalShell), findsNothing);
+    },
+  );
+  testWidgets('Email return opens existing login without authenticating', (
+    t,
+  ) async {
     phone(t);
     final s = await fresh(signed: false);
     var signedIn = false;
-    await t.pumpWidget(MaterialApp(home: AccountFlow(s,
-      confirmationReturn: 1, onReady: () => signedIn = true)));
+    await t.pumpWidget(
+      MaterialApp(
+        home: AccountFlow(
+          s,
+          confirmationReturn: 1,
+          onReady: () => signedIn = true,
+        ),
+      ),
+    );
     await t.pumpAndSettle();
     expect(find.text('Welcome back.'), findsOneWidget);
     expect(find.text('Resend confirmation email'), findsOneWidget);

@@ -183,11 +183,18 @@ class _FaithfulAppState extends State<FaithfulApp> with WidgetsBindingObserver {
   int confirmationReturn = 0;
   Uri? lastLink;
 
-  void receivedLink(Uri uri) {
+  Future<void> receivedLink(Uri uri) async {
     if (!mounted || uri == lastLink) return;
     final message = confirmationMessage(uri);
     if (message == null) return;
     lastLink = uri;
+    // A guest may be exploring while waiting for the signup email.
+    // Return to the login form without deleting the local guest kitchen.
+    if (widget.store.cloud?.usingGuestKitchen ?? false) {
+      await widget.store.prefs.setBool('session_active', false);
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
     // Keep an already signed-in account intact; do not import URL sessions.
     setState(() => confirmationReturn++);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -233,7 +240,9 @@ class _FaithfulAppState extends State<FaithfulApp> with WidgetsBindingObserver {
   }
 
   bool get signed =>
-      (widget.store.cloud == null || widget.store.cloud!.signedIn) &&
+      (widget.store.cloud == null ||
+          widget.store.cloud!.signedIn ||
+          widget.store.cloud!.usingGuestKitchen) &&
       (widget.store.prefs.getBool('session_active') ?? false);
   @override
   Widget build(BuildContext c) => signed

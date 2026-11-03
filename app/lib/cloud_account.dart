@@ -34,6 +34,8 @@ class CloudAccount extends ChangeNotifier {
     local.onChange = () => schedule();
   }
   bool get configured => client != null;
+  bool get usingGuestKitchen =>
+      ready && client?.auth.currentUser == null && local.scope == 'signed-out';
   bool get signedIn =>
       ready &&
       client?.auth.currentUser != null &&
@@ -150,7 +152,9 @@ class CloudAccount extends ChangeNotifier {
   Future<void> signOut() async {
     timer?.cancel();
     await running;
-    await client?.auth.signOut(scope: SignOutScope.local);
+    if (client?.auth.currentUser != null) {
+      await client!.auth.signOut(scope: SignOutScope.local);
+    }
     await bind();
   }
 
