@@ -4,6 +4,8 @@
 
 ## Activate the service
 
+The Dishcovery production Worker is deployed at `https://dishcovery-media.bobiasdeuz.workers.dev` with `PHOTOS` bound to the private Standard bucket `dishcovery-photos`. Migration `202611030003_activate_media.sql` records the production endpoint for APK 1.2.0 and later. Use the steps below to reproduce the setup on another account.
+
 1. The Cloudflare account owner activates R2 and reviews the account's billing terms. Standard storage includes a monthly free allowance with usage-based overages.
 2. Create the private Standard bucket `dishcovery-photos`. Keep public bucket access disabled.
 3. Deploy `worker.mjs` as a Worker named `dishcovery-media` with the `PHOTOS` R2 binding and the two public Supabase variables specified in `wrangler.jsonc`. An owner using an already authorized Wrangler CLI can run `npx wrangler r2 bucket create dishcovery-photos` and `npx wrangler deploy --config cloudflare/wrangler.jsonc` from the repository root. No Supabase service-role key is used.
