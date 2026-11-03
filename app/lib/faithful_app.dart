@@ -10,7 +10,6 @@ import 'account_flow.dart';
 import 'recipe_screens.dart';
 import 'fitness_screens.dart';
 
-import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'nutrition.dart';
 import 'main.dart' show AssistantScreen;
@@ -236,7 +235,10 @@ class _FaithfulAppState extends State<FaithfulApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) widget.store.cloud?.sync();
+    if (state == AppLifecycleState.resumed) {
+      widget.store.cloud?.sync();
+      widget.store.refreshCommunity();
+    }
   }
 
   bool get signed =>
@@ -282,6 +284,7 @@ class _OriginalShellState extends State<OriginalShell> {
   void initState() {
     super.initState();
     s.addListener(refresh);
+    s.refreshCommunity();
   }
 
   void refresh() {
@@ -626,9 +629,17 @@ class _OriginalShellState extends State<OriginalShell> {
         ),
         heading(
           'From the community',
-          action: Text('Sample feed', style: type(10, color: muted)),
+          action: s.viewer == null
+              ? Text('Sample feed', style: type(10, color: muted))
+              : IconButton(
+                  tooltip: 'Refresh community',
+                  onPressed: s.refreshCommunity,
+                  icon: const Icon(Icons.refresh),
+                ),
         ),
-        for (final r in s.recipes.take(3)) feed(r),
+        if (s.viewer != null && s.feedError != null) Text(s.feedError!),
+        for (final r in s.posts) feed(r),
+        for (final r in seedRecipes.take(3)) feed(r),
         gap(18),
         Center(
           child: Text(
@@ -653,11 +664,17 @@ class _OriginalShellState extends State<OriginalShell> {
         ListTile(
           leading: CircleAvatar(
             backgroundColor: pale,
-            child: Text(r.author[0], style: type(12, color: burgundy)),
+            child: r.authorAvatar.startsWith('r2:')
+                ? ClipOval(child: FoodImage(r.authorAvatar, height: 40))
+                : Text(r.author[0], style: type(12, color: burgundy)),
           ),
           title: Text(r.author, style: type(12, weight: FontWeight.w700)),
           subtitle: Text(
-            '${r.own ? 'Your original' : 'Sample community'} recipe · ${r.category}',
+            '${r.own
+                ? 'Your original'
+                : s.posts.any((post) => post.id == r.id)
+                ? 'Community'
+                : 'Sample community'} recipe · ${r.category}',
             style: type(10, color: muted),
           ),
           onTap: () => present(context, PersonPage(s, r.author)),
@@ -934,7 +951,7 @@ class _OriginalShellState extends State<OriginalShell> {
           builder: (c) => AlertDialog(
             title: const Text('A little help in your kitchen'),
             content: const Text(
-              'Create and save recipes, match your pantry, compare ingredient costs in pesos, and track meals from your fitness profile. Your kitchen is saved locally and can sync with your account. The community feed currently contains sample content.',
+              'Create and save recipes, match your pantry, compare ingredient costs in pesos, and track meals from your fitness profile. Your kitchen is saved locally and can sync with your account. Use Post to community to share a recipe with other members.',
             ),
             actions: [
               TextButton(
@@ -1017,12 +1034,19 @@ class _OriginalShellState extends State<OriginalShell> {
                         }
                         return;
                       }
-                      update(
-                        () => avatar =
-                            'data:image/${f.extension};base64,${base64Encode(f.bytes!)}',
+                      final photo = await s.storePhoto(
+                        f.bytes!,
+                        'avatar',
+                        f.extension,
                       );
+                      if (c.mounted) update(() => avatar = photo);
                     } catch (_) {
-                      if (c.mounted) toast(c, 'Could not open photo.');
+                      if (c.mounted) {
+                        toast(
+                          c,
+                          'Could not save this photo. Check your connection and try a JPEG, PNG or WebP image.',
+                        );
+                      }
                     }
                   },
                   icon: const Icon(Icons.add_a_photo_outlined),
@@ -1330,7 +1354,11 @@ class _OriginalSearchState extends State<OriginalSearch> {
                     child: Text(name[0]),
                   ),
                   title: Text(name),
-                  subtitle: const Text('Sample community cook'),
+                  subtitle: Text(
+                    s.posts.any((r) => r.author == name)
+                        ? 'Community cook'
+                        : 'Sample community cook',
+                  ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => present(c, PersonPage(s, name)),
                 ),
@@ -1394,7 +1422,12 @@ class PersonPage extends StatelessWidget {
             gap(14),
             Text(name, style: type(24, weight: FontWeight.w700)),
             gap(10),
-            Text('Sample community cook', style: type(12, color: muted)),
+            Text(
+              s.posts.any((r) => r.author == name)
+                  ? 'Community cook'
+                  : 'Sample community cook',
+              style: type(12, color: muted),
+            ),
             gap(20),
             primary(s.following.contains(name) ? 'Following' : 'Follow', () {
               s.following.contains(name)

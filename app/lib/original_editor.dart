@@ -25,6 +25,8 @@ class _RecipeEditorState extends State<RecipeEditor> {
   String category = 'Filipino', level = 'Beginner', image = 'assets/bowl.jpg';
   Set<String> allergens = {};
   bool saved = false;
+  bool posting = false;
+  bool saving = false;
   String get draftKey => 'recipe_draft_${widget.recipe?.id ?? 'new'}';
   TextEditingController ctrl(String key) =>
       controllers.putIfAbsent(key, () => TextEditingController());
@@ -235,13 +237,21 @@ class _RecipeEditorState extends State<RecipeEditor> {
         if (mounted) toast(context, 'Choose a photo smaller than 3 MB.');
         return;
       }
-      setState(
-        () => image =
-            'data:image/${f.extension};base64,${base64Encode(f.bytes!)}',
+      final photo = await widget.store.storePhoto(
+        f.bytes!,
+        'recipe',
+        f.extension,
       );
+      if (!mounted) return;
+      setState(() => image = photo);
       draft();
     } catch (_) {
-      if (mounted) toast(context, 'Could not open this photo.');
+      if (mounted) {
+        toast(
+          context,
+          'Could not save this photo. Check your connection and try a JPEG, PNG or WebP image.',
+        );
+      }
     }
   }
 
@@ -284,13 +294,32 @@ class _RecipeEditorState extends State<RecipeEditor> {
       }
     }
     final r = Recipe.fromJson(j);
+    if (saving) return;
+    setState(() => saving = true);
     widget.store.put(r);
     await widget.store.save();
     if (widget.store.storageError == null) {
+      if (posting && widget.store.viewer != null) {
+        try {
+          await widget.store.publishRecipe(r);
+        } catch (_) {
+          saved = true;
+          await widget.store.prefs.remove(draftKey);
+          if (mounted) {
+            toast(
+              context,
+              'Saved privately. Open the recipe and tap Post to community to retry.',
+            );
+            Navigator.pop(context);
+          }
+          return;
+        }
+      }
       saved = true;
       await widget.store.prefs.remove(draftKey);
       if (mounted) Navigator.pop(context);
     } else if (mounted) {
+      setState(() => saving = false);
       toast(context, widget.store.storageError!);
     }
   }
@@ -693,7 +722,25 @@ class _RecipeEditorState extends State<RecipeEditor> {
                   onPressed: () => setState(() => stage = 0),
                   child: const Text('Back to ingredients'),
                 ),
-                primary('Save recipe', save),
+                if (widget.store.viewer != null)
+                  SwitchListTile(
+                    title: const Text('Post to community'),
+                    subtitle: const Text(
+                      'Share this recipe and its photo with other Dishcovery members.',
+                    ),
+                    value: posting,
+                    onChanged: saving
+                        ? null
+                        : (value) => setState(() => posting = value),
+                  ),
+                primary(
+                  saving
+                      ? 'Saving…'
+                      : posting
+                      ? 'Save and post recipe'
+                      : 'Save recipe',
+                  saving ? null : save,
+                ),
               ],
               gap(15),
               Center(

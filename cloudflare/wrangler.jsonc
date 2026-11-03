@@ -1,0 +1,11 @@
+{
+  "name": "dishcovery-media",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "r2_buckets": [{"binding":"PHOTOS","bucket_name":"dishcovery-photos"}],
+  "vars": {
+    "SUPABASE_URL": "https://rjinxrhgkzzvxcnhybmq.supabase.co",
+    "SUPABASE_KEY": "sb_publishable_NkhS2eTAS99PZB_ff98G2Q_2gLfXHjN"
+  }
+}

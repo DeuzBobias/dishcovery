@@ -7,6 +7,7 @@ import 'deficit.dart';
 import 'package:flutter/foundation.dart';
 import 'cloud_account.dart';
 import 'allergies.dart';
+import 'media_store.dart';
 
 class Recipe {
   final String id,
@@ -23,6 +24,7 @@ class Recipe {
   final Map<String, String> swaps;
   final Map<String, dynamic> timers;
   final bool own;
+  final String authorAvatar;
   final Map<String, dynamic>? nutrition;
   final Map<String, dynamic> ingredientFacts;
   Recipe({
@@ -43,6 +45,7 @@ class Recipe {
     this.swaps = const {},
     this.timers = const {},
     this.own = false,
+    this.authorAvatar = '',
     this.tools = 'Knife, chopping board, pan',
     this.tips = 'Taste as you go and adjust the seasoning to your liking.',
   });
@@ -92,6 +95,7 @@ class Recipe {
           }
         : Map<String, dynamic>.from(j['timers'] ?? {}),
     own: j['own'] ?? false,
+    authorAvatar: j['authorAvatar'] is String ? j['authorAvatar'] : '',
     tools: j['tools'] ?? '',
     tips: j['tips'] ?? '',
   );
@@ -134,7 +138,118 @@ class KitchenStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<Recipe> get recipes => [...own, ...seedRecipes];
+  String? _feedViewer;
+  List<Recipe> _posts = [];
+  int _feedRequest = 0;
+  String? feedError;
+  String? get viewer => cloud?.signedIn == true ? cloud!.local.scope : null;
+  List<Recipe> get posts =>
+      viewer != null && viewer == _feedViewer ? _posts : const [];
+  List<Recipe> get recipes => [
+    ...own,
+    ...posts.where((post) => !own.any((r) => r.id == post.id)),
+    ...seedRecipes,
+  ];
+
+  Future<void> refreshCommunity() async {
+    final user = viewer;
+    if (user == null) return;
+    final request = ++_feedRequest;
+    try {
+      final rows = await cloud!.client!
+          .from('community_recipes')
+          .select('owner_id,recipe_id,recipe')
+          .order('posted_at', ascending: false)
+          .limit(50)
+          .timeout(const Duration(seconds: 12));
+      if (viewer != user || request != _feedRequest) return;
+      final loaded = <Recipe>[];
+      for (final row in rows) {
+        try {
+          final isMine = row['owner_id'] == user;
+          final post = Recipe.fromJson({
+            ...Map<String, dynamic>.from(row['recipe']),
+            'id': isMine
+                ? row['recipe_id']
+                : 'community/${row['owner_id']}/${row['recipe_id']}',
+            'own': isMine && own.any((r) => r.id == row['recipe_id']),
+          });
+          if (post.author.trim().isNotEmpty && post.title.trim().isNotEmpty) {
+            loaded.add(post);
+          }
+        } on TypeError {
+          continue;
+        }
+      }
+      _posts = loaded;
+      _feedViewer = user;
+      feedError = null;
+    } catch (_) {
+      if (viewer != user || request != _feedRequest) return;
+      feedError = 'Could not refresh community posts. Tap refresh to retry.';
+    }
+    notifyListeners();
+  }
+
+  Future<void> publishRecipe(Recipe recipe) async {
+    if (viewer == null || !own.any((item) => item.id == recipe.id)) {
+      throw StateError('A signed-in recipe owner is required.');
+    }
+    final data = recipe.toJson();
+    final owner = viewer;
+    final client = cloud!.client!;
+    if (recipe.image.startsWith('data:') &&
+        await MediaStore.origin(client) != null) {
+      data['image'] = await MediaStore.upload(
+        client,
+        base64Decode(recipe.image.split(',').last),
+        'recipe',
+      );
+    }
+    if (viewer != owner) throw StateError('Account changed');
+    await client
+        .rpc(
+          'publish_recipe',
+          params: {
+            'recipe_id_arg': recipe.id,
+            'recipe_arg': {
+              ...data,
+              'own': false,
+              'author': name,
+              if (avatar.startsWith('r2:')) 'authorAvatar': avatar,
+            },
+          },
+        )
+        .timeout(const Duration(seconds: 15));
+    await refreshCommunity();
+  }
+
+  Future<void> withdrawRecipe(Recipe recipe) async {
+    final user = viewer;
+    if (user == null) return;
+    await cloud!.client!
+        .from('community_recipes')
+        .delete()
+        .eq('owner_id', user)
+        .eq('recipe_id', recipe.id)
+        .timeout(const Duration(seconds: 12));
+    await refreshCommunity();
+  }
+
+  Future<String> storePhoto(
+    Uint8List bytes,
+    String kind,
+    String? extension,
+  ) async {
+    final user = viewer;
+    if (user == null || await MediaStore.origin(cloud!.client!) == null) {
+      return 'data:image/$extension;base64,${base64Encode(bytes)}';
+    }
+    final ref = await MediaStore.upload(cloud!.client!, bytes, kind);
+    if (viewer != user) throw StateError('Account changed');
+    return ref;
+  }
+
   void reload() {
     _load();
     notifyListeners();

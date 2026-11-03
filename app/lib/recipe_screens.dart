@@ -21,6 +21,7 @@ class RecipeDetails extends StatefulWidget {
 class _RecipeDetailsState extends State<RecipeDetails> {
   final checked = <String>{};
   final note = TextEditingController();
+  bool publishing = false;
   KitchenStore get s => widget.store;
   Recipe get r => s.recipes.firstWhere(
     (r) => r.id == widget.recipe.id,
@@ -210,6 +211,29 @@ class _RecipeDetailsState extends State<RecipeDetails> {
                 style: type(12, color: Colors.orange.shade900),
               ),
             ],
+            if (r.own && s.viewer != null)
+              TextButton.icon(
+                icon: const Icon(Icons.public),
+                label: Text(publishing ? 'Posting…' : 'Post to community'),
+                onPressed: publishing
+                    ? null
+                    : () async {
+                        setState(() => publishing = true);
+                        try {
+                          await s.publishRecipe(r);
+                          if (c.mounted) toast(c, 'Posted to community');
+                        } catch (_) {
+                          if (c.mounted) {
+                            toast(
+                              c,
+                              'Could not post. Check your connection and try again.',
+                            );
+                          }
+                        } finally {
+                          if (mounted) setState(() => publishing = false);
+                        }
+                      },
+              ),
             title('Ingredients'),
             Text('Check as you go', style: type(11, color: muted)),
             gap(10),
@@ -365,6 +389,17 @@ class _RecipeDetailsState extends State<RecipeDetails> {
                     ),
                   );
                   if (yes == true) {
+                    try {
+                      await s.withdrawRecipe(r);
+                    } catch (_) {
+                      if (c.mounted) {
+                        toast(
+                          c,
+                          'Connect to the internet to remove the recipe from the community.',
+                        );
+                      }
+                      return;
+                    }
                     s.remove(r);
                     if (c.mounted) Navigator.pop(c);
                   }

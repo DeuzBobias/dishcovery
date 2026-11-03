@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'media_store.dart';
 
 import 'package:flutter/material.dart';
 
@@ -48,6 +50,15 @@ class FoodImage extends StatelessWidget {
         child: Icon(Icons.restaurant_rounded, size: 60, color: green),
       ),
     );
+    if (source.startsWith('r2:')) {
+      return _StoredPhoto(
+        key: ValueKey(source),
+        source: source,
+        height: height,
+        fit: fit,
+        fallback: fallback,
+      );
+    }
     if (source.startsWith('data:')) {
       try {
         return Image.memory(
@@ -69,6 +80,39 @@ class FoodImage extends StatelessWidget {
       errorBuilder: (_, e, s) => fallback(),
     );
   }
+}
+
+class _StoredPhoto extends StatefulWidget {
+  final String source;
+  final double? height;
+  final BoxFit fit;
+  final Widget Function() fallback;
+  const _StoredPhoto({
+    super.key,
+    required this.source,
+    required this.height,
+    required this.fit,
+    required this.fallback,
+  });
+  @override
+  State<_StoredPhoto> createState() => _StoredPhotoState();
+}
+
+class _StoredPhotoState extends State<_StoredPhoto> {
+  late final Future<Uint8List> bytes = MediaStore.read(widget.source);
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Uint8List>(
+    future: bytes,
+    builder: (context, snapshot) => snapshot.hasData
+        ? Image.memory(
+            snapshot.data!,
+            width: double.infinity,
+            height: widget.height,
+            fit: widget.fit,
+            errorBuilder: (_, e, s) => widget.fallback(),
+          )
+        : widget.fallback(),
+  );
 }
 
 class Surface extends StatelessWidget {
