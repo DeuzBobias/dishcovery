@@ -9,7 +9,7 @@ import 'ui.dart';
 import 'account_flow.dart';
 import 'recipe_screens.dart';
 import 'fitness_screens.dart';
-import 'backup_screen.dart';
+
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'nutrition.dart';
@@ -336,7 +336,7 @@ class _OriginalShellState extends State<OriginalShell> {
             child: Row(
               children: [
                 IconButton(
-                  tooltip: page == 0 ? 'Profile settings' : 'Go back',
+                  tooltip: page == 0 ? 'Profile' : 'Go back',
                   onPressed: () => setState(() => page = page == 0 ? 4 : 0),
                   icon: Icon(page == 0 ? Icons.menu : Icons.arrow_back),
                 ),
@@ -345,13 +345,7 @@ class _OriginalShellState extends State<OriginalShell> {
                     child: page == 0
                         ? brand()
                         : Text(
-                            [
-                              '',
-                              'Recipes',
-                              '',
-                              'Activity',
-                              'Profile Settings',
-                            ][page],
+                            ['', 'Recipes', '', 'Activity', 'Profile'][page],
                             style: type(
                               19,
                               color: burgundy,
@@ -360,25 +354,18 @@ class _OriginalShellState extends State<OriginalShell> {
                           ),
                   ),
                 ),
-                IconButton(
-                  tooltip: page == 0
-                      ? 'Kitchen assistant'
-                      : page == 1
-                      ? 'Create recipe'
-                      : 'Settings',
-                  onPressed: page == 0
-                      ? assistant
-                      : page == 1
-                      ? () => present(context, RecipeEditor(s))
-                      : settings,
-                  icon: Icon(
-                    page == 0
-                        ? Icons.auto_awesome_outlined
-                        : page == 1
-                        ? Icons.add
-                        : Icons.settings_outlined,
-                  ),
-                ),
+                if (page == 0 || page == 1)
+                  IconButton(
+                    tooltip: page == 0 ? 'Kitchen assistant' : 'Create recipe',
+                    onPressed: page == 0
+                        ? assistant
+                        : () => present(context, RecipeEditor(s)),
+                    icon: Icon(
+                      page == 0 ? Icons.auto_awesome_outlined : Icons.add,
+                    ),
+                  )
+                else
+                  const SizedBox(width: 48),
               ],
             ),
           ),
@@ -686,7 +673,13 @@ class _OriginalShellState extends State<OriginalShell> {
                 children: [
                   IconButton(
                     tooltip: 'Like ${r.title}',
-                    onPressed: () => s.like(r),
+                    onPressed: () {
+                      s.like(r);
+                      toast(
+                        context,
+                        s.liked.contains(r.id) ? 'Post liked' : 'Like removed',
+                      );
+                    },
                     icon: Icon(
                       s.liked.contains(r.id)
                           ? Icons.favorite
@@ -697,7 +690,7 @@ class _OriginalShellState extends State<OriginalShell> {
                   ),
                   IconButton(
                     tooltip: 'Save ${r.title}',
-                    onPressed: () => s.bookmark(r),
+                    onPressed: () => toggleBookmark(context, s, r),
                     icon: Icon(
                       s.saved.contains(r.id)
                           ? Icons.bookmark
@@ -924,8 +917,6 @@ class _OriginalShellState extends State<OriginalShell> {
           style: type(12, color: burgundy),
         ),
       ),
-      setting('Settings', Icons.settings_outlined, settings),
-      setting('Notifications', Icons.notifications_none, settings),
       heading('Your kitchen'),
       setting(
         'Smart Pantry',
@@ -949,38 +940,6 @@ class _OriginalShellState extends State<OriginalShell> {
               TextButton(
                 onPressed: () => Navigator.pop(c),
                 child: const Text('Got it'),
-              ),
-            ],
-          ),
-        ),
-      ),
-      setting(
-        'Export my kitchen',
-        Icons.file_download_outlined,
-        () => present(context, BackupScreen(s)),
-      ),
-      setting(
-        'Reset my kitchen',
-        Icons.delete_outline,
-        () => showDialog(
-          context: context,
-          builder: (c) => AlertDialog(
-            title: const Text('Reset my kitchen?'),
-            content: const Text(
-              'This clears your kitchen and syncs the reset to your account. Export a backup first to keep a copy.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(c),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(c);
-                  await s.reset();
-                  widget.onLogout();
-                },
-                child: const Text('Delete'),
               ),
             ],
           ),
@@ -1102,69 +1061,6 @@ class _OriginalShellState extends State<OriginalShell> {
       ),
     );
   }
-
-  void settings() => showModalBottomSheet(
-    context: context,
-    showDragHandle: true,
-    builder: (c) => StatefulBuilder(
-      builder: (c, update) => Padding(
-        padding: const EdgeInsets.all(22),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Settings', style: type(20, weight: FontWeight.w700)),
-            SwitchListTile(
-              title: const Text('Kitchen activity notifications'),
-              value: s.notifications,
-              onChanged: (v) async {
-                if (v) {
-                  try {
-                    await AndroidApi.requestNotifications();
-                  } catch (_) {
-                    if (c.mounted) {
-                      toast(c, 'Enable notifications in Android settings.');
-                    }
-                  }
-                }
-                s.notifications = v;
-                s.save();
-                update(() {});
-              },
-            ),
-            ListTile(
-              title: const Text('Send test notification'),
-              onTap: () async {
-                if (!s.notifications) {
-                  toast(c, 'Turn on kitchen notifications first.');
-                  return;
-                }
-                try {
-                  await AndroidApi.notification(
-                    'Notifications are ready for your kitchen.',
-                  );
-                  if (c.mounted) toast(c, 'Test notification sent');
-                } catch (_) {
-                  if (c.mounted) {
-                    toast(
-                      c,
-                      'Allow Dishcovery notifications in Android settings, then try again.',
-                    );
-                  }
-                }
-              },
-            ),
-            ListTile(
-              title: const Text('Backup & restore'),
-              onTap: () {
-                Navigator.pop(c);
-                present(context, BackupScreen(s));
-              },
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }
 
 class OriginalGrid extends StatelessWidget {
@@ -1245,7 +1141,7 @@ class OriginalGrid extends StatelessWidget {
                         style: IconButton.styleFrom(
                           backgroundColor: Colors.white,
                         ),
-                        onPressed: () => s.bookmark(r),
+                        onPressed: () => toggleBookmark(c, s, r),
                         icon: Icon(
                           s.saved.contains(r.id)
                               ? Icons.bookmark

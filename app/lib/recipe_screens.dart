@@ -62,7 +62,7 @@ class _RecipeDetailsState extends State<RecipeDetails> {
         'Recipe',
         action: IconButton(
           tooltip: 'Save recipe',
-          onPressed: () => s.bookmark(r),
+          onPressed: () => toggleBookmark(c, s, r),
           icon: Icon(
             s.saved.contains(r.id) ? Icons.bookmark : Icons.bookmark_border,
           ),

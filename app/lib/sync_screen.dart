@@ -41,7 +41,7 @@ class SyncScreen extends StatelessWidget {
                         builder: (d) => AlertDialog(
                           title: const Text('Import earlier device data?'),
                           content: const Text(
-                            'This replaces your current kitchen with data saved by the earlier app on this phone. Only import it if that data is yours. Export your current kitchen first.',
+                            'This replaces your current kitchen with data saved by the earlier app on this phone. Only import it if that data is yours.',
                           ),
                           actions: [
                             TextButton(
@@ -102,7 +102,7 @@ class SyncScreen extends StatelessWidget {
             if (cloud.conflict) ...[
               gap(),
               const Text(
-                'Both devices have changes. Choose which complete kitchen to keep. Export a backup before replacing either copy.',
+                'Both devices have changes. Choose which complete kitchen to keep.',
               ),
               for (final useCloud in [true, false])
                 TextButton(

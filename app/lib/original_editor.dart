@@ -175,7 +175,10 @@ class _RecipeEditorState extends State<RecipeEditor> {
       maxLines: maxLines,
       keyboardType: number
           ? const TextInputType.numberWithOptions(decimal: true)
+          : maxLines > 1
+          ? TextInputType.multiline
           : TextInputType.text,
+      textInputAction: maxLines > 1 ? TextInputAction.newline : null,
       decoration: inputBox(),
       validator: (v) {
         if (required && (v ?? '').trim().isEmpty) return 'Required';

@@ -266,6 +266,11 @@ void main() {
     await t.pumpAndSettle();
     final fs = find.byType(TextFormField);
     await t.enterText(fs.at(0), 'Egg rice');
+    final ingredientInput = t.widget<EditableText>(
+      find.descendant(of: fs.at(8), matching: find.byType(EditableText)),
+    );
+    expect(ingredientInput.keyboardType, TextInputType.multiline);
+    expect(ingredientInput.textInputAction, TextInputAction.newline);
     await t.enterText(fs.at(8), '2 eggs\n1 cup rice');
     await t.pumpAndSettle();
     expect(
@@ -283,6 +288,7 @@ void main() {
     await t.enterText(find.byType(TextFormField).at(1), '60');
     await click(t, 'Save recipe');
     expect(s.own.single.title, 'Egg rice');
+    expect(s.own.single.ingredients, ['2 eggs', '1 cup rice']);
     expect(s.own.single.timers['0'], 60);
     expect(s.prefs.getString('recipe_draft_new'), isNull);
     expect(t.takeException(), isNull);

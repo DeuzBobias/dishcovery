@@ -178,7 +178,7 @@ class RecipeCard extends StatelessWidget {
                       backgroundColor: Colors.white,
                       foregroundColor: ink,
                     ),
-                    onPressed: () => store.bookmark(r),
+                    onPressed: () => toggleBookmark(context, store, r),
                     icon: Icon(
                       store.saved.contains(r.id)
                           ? Icons.bookmark_rounded
@@ -307,6 +307,16 @@ class RecipeGrid extends StatelessWidget {
             .toList(),
       );
     },
+  );
+}
+
+void toggleBookmark(BuildContext context, KitchenStore store, Recipe recipe) {
+  store.bookmark(recipe);
+  toast(
+    context,
+    store.saved.contains(recipe.id)
+        ? 'Added to Bookmarks'
+        : 'Removed from Bookmarks',
   );
 }
 
